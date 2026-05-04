@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'futcout@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'whatsapp', 'cpf', 'role', 'isBlocked', 'createdAt', 'updatedAt']) &&
+             data.keys().size() == 8 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+             data.whatsapp is string && data.whatsapp.size() >= 10 && data.whatsapp.size() <= 20 &&
+             data.cpf is string && data.cpf.size() == 14 &&
+             data.role in ['user', 'admin'] &&
+             data.isBlocked is bool &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidUserUpdate(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+             data.whatsapp is string && data.whatsapp.size() >= 10 && data.whatsapp.size() <= 20 &&
+             data.cpf is string && data.cpf.size() == 14 &&
+             data.updatedAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming()) &&
+                       (incoming().role == 'user' || (incoming().role == 'admin' && isAdmin())) && 
+                       incoming().isBlocked == false &&
+                       incoming().email == request.auth.token.email;
+
+      allow update: if (
+        isOwner(userId) && 
+        isValidId(userId) &&
+        isValidUserUpdate(incoming()) &&
+        incoming().role == existing().role &&
+        incoming().isBlocked == existing().isBlocked &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'whatsapp', 'cpf', 'updatedAt'])
+      ) || (
+        isAdmin() && 
+        isValidId(userId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isBlocked', 'role', 'updatedAt']) &&
+        incoming().updatedAt == request.time
+      );
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['userId', 'sport', 'dateId', 'time', 'status', 'createdAt']) &&
+             data.keys().size() == 6 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.sport in ['society', 'areia'] &&
+             data.dateId is string && data.dateId.size() > 0 && data.dateId.size() <= 20 &&
+             data.time is string && data.time.size() > 0 && data.time.size() <= 10 &&
+             data.status in ['pending', 'confirmed', 'wo'] &&
+             data.createdAt == request.time;
+    }
+
+    match /bookings/{bookingId} {
+      allow list: if isAdmin() || resource.data.sport in ['society', 'areia'] || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isAdmin() || resource.data.sport in ['society', 'areia'] || (isSignedIn() && resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() &&
+                       isValidId(bookingId) &&
+                       isValidBooking(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBlocked == false;
+
+      allow update: if isAdmin() &&
+                       isValidId(bookingId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+                       incoming().status in ['pending', 'confirmed', 'wo'];
+                       
+      allow delete: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid && existing().status == 'pending');
+    }
+  }
+}
