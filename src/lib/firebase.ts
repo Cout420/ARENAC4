@@ -1,6 +1,18 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Configuração flexível: Use as variáveis de ambiente (.env) OU cole suas chaves diretamente aqui.
+const customConfig = {
+  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || 'AIzaSyA-bb4hQ0uq1cJsQRSH1GOajvsjPzNEwvo',
+  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || 'c4arena-1b699.firebaseapp.com',
+  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || 'c4arena-1b699',
+  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || 'c4arena-1b699.firebasestorage.app',
+  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1046994099437',
+  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || '1:1046994099437:web:0baca171d45182466300e4',
+  measurementId: (import.meta as any).env.VITE_FIREBASE_MEASUREMENT_ID || 'G-5P76XHTKRL'
+};
 
 export enum OperationType {
   CREATE = 'create',
@@ -28,8 +40,9 @@ interface FirestoreErrorInfo {
   }
 }
 
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const app = initializeApp(customConfig);
+export const db = getFirestore(app, customConfig.projectId === firebaseConfig.projectId ? firebaseConfig.firestoreDatabaseId : undefined);
+export const storage = getStorage(app);
 
 let _auth: any = null;
 export async function getFirebaseAuth() {
@@ -88,14 +101,3 @@ export async function handleFirestoreError(error: unknown, operationType: Operat
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Test Connection on Start
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-testConnection();

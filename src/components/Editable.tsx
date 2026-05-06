@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, ChangeEvent } from 'react';
 import { useStore } from '../store/useStore';
-import { Edit2, ImagePlus, Check, X } from 'lucide-react';
+import { Edit2, ImagePlus, Check, X, Loader2 } from 'lucide-react';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../lib/firebase';
 
 interface EditableTextProps {
   value: string;
@@ -85,21 +87,68 @@ interface EditableImageProps {
   className?: string;
   aspectRatio?: string;
   loading?: 'lazy' | 'eager';
+  buttonPosition?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 }
 
-export function EditableImage({ src, onSave, className = '', aspectRatio = 'aspect-[4/3]', loading }: EditableImageProps) {
+export function EditableImage({ 
+  src, 
+  onSave, 
+  className = '', 
+  aspectRatio = 'aspect-[4/3]', 
+  loading,
+  buttonPosition = 'center'
+}: EditableImageProps) {
   const isAdminMode = useStore(state => state.isAdminMode);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Simulated file upload
-  const handleUpload = () => {
-    // In a real app this would open a file picker and upload to storage.
-    // For now we simulate changing the image url via prompt.
-    const url = window.prompt('URL da nova imagem (simulação de upload):', src);
-    if (url && url !== src) {
-      setIsLoaded(false);
-      onSave(url);
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const uniqueId = Math.random().toString(36).substring(2, 10);
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const fileName = `images/${Date.now()}-${uniqueId}.${fileExt}`;
+      const storageRef = ref(storage, fileName);
+      
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload is ${progress}% done`);
+        },
+        (error) => {
+          console.error("Upload error", error);
+          setIsUploading(false);
+          if (error.code === 'storage/retry-limit-exceeded') {
+            alert("Erro do Firebase Storage: Limite de tentativas excedido.\n\nISSO GERALMENTE OCORRE PORQUE O STORAGE NÃO FOI ATIVADO.\n1. Acesse o Firebase Console.\n2. Vá em 'Storage' e clique em 'Get Started'.\n3. Configure as Regras (Rules) para permitir leitura/escrita.");
+          } else if (error.code === 'storage/unauthorized') {
+            alert("Erro de Permissão: Suas regras do Firebase Storage estão bloqueando o upload. Acesse o Console do Firebase > Storage > Rules e libere o acesso (ex: allow read, write: if true;).");
+          } else {
+            alert(`Erro ao fazer upload da imagem: ${error.message}`);
+          }
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          setIsLoaded(false); // Reset to trigger blur animation
+          onSave(downloadURL);
+          setIsUploading(false);
+        }
+      );
+    } catch (error: any) {
+      console.error("Upload error", error);
+      setIsUploading(false);
+      alert(`Erro ao fazer upload da imagem: ${error?.message || 'Desconhecido'}`);
     }
+  };
+
+  const handleUpload = () => {
+    fileInputRef.current?.click();
   };
 
   const imageClass = `transition-all duration-500 ${!isLoaded ? 'blur-sm scale-105' : 'blur-0 scale-100'} ${className}`;
@@ -128,14 +177,27 @@ export function EditableImage({ src, onSave, className = '', aspectRatio = 'aspe
 
   return (
     <div className={`relative group w-full h-full cursor-pointer overflow-hidden bg-zinc-900`}>
+      <input 
+        type="file" 
+        accept="image/*" 
+        className="hidden" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+      />
+      
       {/* Placeholder Background */}
-      {!isLoaded && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 animate-pulse z-0">
-          <svg className="w-8 h-8 text-zinc-800 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+      {(!isLoaded || isUploading) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/80 backdrop-blur-sm z-30">
+          {isUploading ? (
+            <Loader2 className="w-8 h-8 text-[#CCFF00] animate-spin mb-2" />
+          ) : (
+            <svg className="w-8 h-8 text-zinc-800 mb-2 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          )}
         </div>
       )}
+      
       <img 
         src={src} 
         alt="Gallery" 
@@ -144,13 +206,22 @@ export function EditableImage({ src, onSave, className = '', aspectRatio = 'aspe
         onLoad={() => setIsLoaded(true)}
       />
       
-      <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+      <div 
+        className={`absolute z-[60] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none flex ${
+          buttonPosition === 'center' ? 'inset-0 items-center justify-center' : 
+          buttonPosition === 'top-left' ? 'top-24 left-8' :
+          buttonPosition === 'top-right' ? 'top-24 right-8' :
+          buttonPosition === 'bottom-left' ? 'bottom-8 left-8' :
+          'bottom-8 right-8'
+        }`}
+      >
         <button 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUpload(); }}
-          className="pointer-events-auto bg-[#CCFF00] text-black font-black uppercase text-sm px-4 py-2 flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-xl"
+          disabled={isUploading}
+          className="pointer-events-auto bg-[#CCFF00] text-black font-black uppercase text-sm px-4 py-2 flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <ImagePlus size={16} />
-          Trocar Foto
+          {isUploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+          {isUploading ? 'Enviando...' : 'Trocar Foto'}
         </button>
       </div>
     </div>

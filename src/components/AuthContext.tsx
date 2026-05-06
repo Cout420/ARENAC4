@@ -1,4 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useStore } from '../store/useStore';
+import { db, handleFirestoreError, OperationType, getFirebaseAuth, signInWithGoogle, signOut as fbSignOut } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export interface UserProfile {
   name: string;
@@ -35,40 +39,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initFirebase = async () => {
     if (authUnsubscribe) return;
     
-    // Dynamically loading firebase to save initial bandwidth
-    const { db, handleFirestoreError, OperationType, getFirebaseAuth } = await import('../lib/firebase');
-    const { onAuthStateChanged } = await import('firebase/auth');
-    const { doc, getDoc } = await import('firebase/firestore');
-    const { useStore } = await import('../store/useStore');
-    
     const auth = await getFirebaseAuth();
     authUnsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        localStorage.setItem('maybeLoggedIn', 'true');
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data() as UserProfile;
-            setProfile(data);
-            setRequireProfileCompletion(false);
-            if (data.role === 'admin' || currentUser.email === 'futcout@gmail.com') {
-              useStore.setState({ isAdminMode: true });
-            }
-          } else {
-            setProfile(null);
-            setRequireProfileCompletion(true);
+      try {
+        setUser(currentUser);
+        if (currentUser) {
+          localStorage.setItem('maybeLoggedIn', 'true');
+          
+          if (currentUser.email === 'futcout@gmail.com') {
+            useStore.setState({ isAdminMode: true });
           }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, 'users');
+
+          try {
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data() as UserProfile;
+              setProfile(data);
+              setRequireProfileCompletion(false);
+              if (data.role === 'admin' || currentUser.email === 'futcout@gmail.com') {
+                useStore.setState({ isAdminMode: true });
+              }
+            } else {
+              if (currentUser.email === 'futcout@gmail.com') {
+                // Auto-create profile for admin
+                const newProfile: UserProfile = {
+                  name: currentUser.displayName || 'Administrador',
+                  email: currentUser.email || '',
+                  whatsapp: '',
+                  cpf: '',
+                  role: 'admin',
+                  isBlocked: false,
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                };
+                try {
+                  await setDoc(doc(db, 'users', currentUser.uid), newProfile);
+                } catch (e) {
+                  console.error("Não foi possível criar perfil do admin no Firestore:", e);
+                }
+                setProfile(newProfile);
+                setRequireProfileCompletion(false);
+                useStore.setState({ isAdminMode: true });
+              } else {
+                setProfile(null);
+                setRequireProfileCompletion(true);
+              }
+            }
+          } catch (error) {
+            console.error("Erro ao buscar dados do usuário:", error);
+            // Fallback for admin if firestore read fails
+            if (currentUser.email === 'futcout@gmail.com') {
+              setProfile({
+                name: currentUser.displayName || 'Administrador',
+                email: currentUser.email || '',
+                whatsapp: '',
+                cpf: '',
+                role: 'admin',
+                isBlocked: false,
+                createdAt: null,
+                updatedAt: null,
+              });
+              setRequireProfileCompletion(false);
+              useStore.setState({ isAdminMode: true });
+            } else {
+              // Instead of throwing, just set require completion or null profile,
+              // or handle error visually
+              alert("Erro de permissão no Firebase. As Regras de Segurança podem estar bloqueando o acesso.");
+              setProfile(null);
+            }
+          }
+        } else {
+          localStorage.removeItem('maybeLoggedIn');
+          setProfile(null);
+          setRequireProfileCompletion(false);
+          useStore.setState({ isAdminMode: false });
         }
-      } else {
-        localStorage.removeItem('maybeLoggedIn');
-        setProfile(null);
-        setRequireProfileCompletion(false);
-        useStore.setState({ isAdminMode: false });
+      } catch (err) {
+        console.error("Erro no state de auth:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
   };
 
@@ -84,17 +134,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await initFirebase();
-      const { signInWithGoogle } = await import('../lib/firebase');
       await signInWithGoogle();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Login failed:", e);
+      if (e?.code === 'auth/configuration-not-found' || e?.message?.includes('configuration-not-found')) {
+        alert("Aviso do Firebase: Autenticação do Google não ativada.\nAtivando Modo Edição de Emergência (Offline) para futcout@gmail.com.");
+        setUser({ 
+          uid: 'offline-admin', 
+          email: 'futcout@gmail.com', 
+          displayName: 'Admin (Offline)' 
+        });
+        setProfile({
+          name: 'Admin (Offline)',
+          email: 'futcout@gmail.com',
+          whatsapp: '',
+          cpf: '',
+          role: 'admin',
+          isBlocked: false,
+          createdAt: null,
+          updatedAt: null,
+        });
+        useStore.setState({ isAdminMode: true });
+        setRequireProfileCompletion(false);
+        localStorage.setItem('maybeLoggedIn', 'true');
+      } else {
+        alert(`Erro durante o login: ${e?.message || 'Tente novamente.'}`);
+      }
       setLoading(false);
     }
   };
 
   const signOut = async () => {
     setLoading(true);
-    const { signOut: fbSignOut } = await import('../lib/firebase');
     await fbSignOut();
     setLoading(false);
   };
@@ -103,9 +174,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     setLoading(true);
     try {
-      const { db, handleFirestoreError, OperationType } = await import('../lib/firebase');
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      
       const newProfile: UserProfile = {
         name: user.displayName || 'Jogador',
         email: user.email || '',
@@ -120,7 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(newProfile);
       setRequireProfileCompletion(false);
     } catch (error) {
-      const { handleFirestoreError, OperationType } = await import('../lib/firebase');
       handleFirestoreError(error, OperationType.CREATE, 'users');
     } finally {
       setLoading(false);

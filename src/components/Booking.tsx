@@ -160,9 +160,9 @@ export function Booking() {
 
 
   return (
-    <section id="booking-section" className="py-24 px-4 bg-arena-dark relative leading-relaxed">
+    <section id="booking-section" className="py-24 px-4 bg-arena-dark relative z-10 leading-relaxed">
       {/* Decorative background elements */}
-      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-arena-orange via-arena-pink to-arena-yellow opacity-50"></div>
+      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-arena-orange via-arena-pink to-arena-yellow opacity-50 pointer-events-none"></div>
       
       <AnimatePresence>
         {pixStep && (
@@ -247,7 +247,7 @@ export function Booking() {
           {/* Main Booking Form */}
           <div className="flex-1 space-y-10 p-6 md:p-10 rounded-2xl border border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl shadow-2xl relative overflow-hidden">
             {/* Progress Bar Top */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-zinc-900 border-b border-white/5">
+            <div className="absolute top-0 left-0 w-full h-1 bg-zinc-900 border-b border-white/5 pointer-events-none">
               <motion.div 
                 className="h-full bg-gradient-to-r from-arena-orange via-arena-pink to-arena-yellow"
                 initial={{ width: '33%' }}

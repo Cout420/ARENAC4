@@ -59,10 +59,10 @@ function LoadingFallback() {
 function AppContent() {
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
-  const { isLoggedIn, isAdminMode } = useStore();
+  const { isLoggedIn, isAdminMode, _hasHydrated } = useStore();
   const { loading, requireProfileCompletion, user, profile, signOut } = useAuth();
 
-  if (loading) {
+  if (loading || !_hasHydrated) {
     return (
       <div className="min-h-screen bg-arena-dark flex items-center justify-center">
         <div className="flex flex-col items-center">

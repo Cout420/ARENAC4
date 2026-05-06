@@ -19,6 +19,9 @@ interface StoreState {
   photos: Array<{ id: number; eventId: string; url: string; photographer: string }>;
   addPhoto: (photo: { id: number; eventId: string; url: string; photographer: string }) => void;
   removePhoto: (id: number) => void;
+  // Hydration state
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
   // Bookings
   bookings: Record<string, 'booked' | 'maintenance'>; // key: "sportId-date-time"
   setBookingStatus: (key: string, status: 'booked' | 'maintenance' | 'available') => void;
@@ -41,6 +44,8 @@ export const useStore = create<StoreState>()(
     (set) => ({
       isLoggedIn: false,
   isAdminMode: false,
+  _hasHydrated: false,
+  setHasHydrated: (state) => set({ _hasHydrated: state }),
   login: (password) => {
     if (password === 'admin123') {
       set({ isLoggedIn: true, isAdminMode: true });
@@ -195,6 +200,11 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'arena-c4-store',
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.setHasHydrated(true);
+        }
+      },
       partialize: (state) => ({ 
         settings: state.settings,
         plans: state.plans,

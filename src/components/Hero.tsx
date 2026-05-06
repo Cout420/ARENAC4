@@ -38,6 +38,7 @@ export function Hero() {
             loading="eager"
             onSave={(url) => updateSlide(slide.id, { bg: url })}
             className="w-full h-full object-cover"
+            buttonPosition="top-left"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-arena-dark/70 via-arena-dark/80 to-arena-dark pointer-events-none"></div>
         </motion.div>

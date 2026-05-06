@@ -131,8 +131,16 @@ export function Footer({ onAdminClick }: Props) {
           <p className="text-[10px] text-zinc-600 font-mono uppercase">
             &copy; 2026 Arena C4 Food&Beer.
           </p>
-          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">
-            <button onClick={onAdminClick} className="flex items-center justify-center w-6 h-6 rounded bg-[#0F0F0F] border border-white/5 hover:text-[#FFD700] hover:border-[#FFD700]/30 transition-colors" title="Acesso Restrito">
+          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-600 relative z-50">
+            <button 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onAdminClick) onAdminClick();
+              }} 
+              className="relative z-50 flex items-center justify-center w-6 h-6 rounded bg-[#0F0F0F] border border-white/5 hover:text-[#FFD700] hover:border-[#FFD700]/30 transition-colors pointer-events-auto" 
+              title="Acesso Restrito"
+            >
               <Lock size={12} />
             </button>
             <a href="#" className="hover:text-[#FFD700] transition-colors">Termos de Uso</a>
