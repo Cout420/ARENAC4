@@ -19,6 +19,11 @@ export function Hero() {
 
   const slide = slides[currentSlide];
 
+  // Forçar atualização do fundo se ainda for a imagem padrão, ignorando o zustand persistido
+  const currentBg = slide?.bg === 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop'
+    ? 'https://i.imgur.com/XJfo1xK.jpeg' 
+    : slide?.bg;
+
   if (!slide) return null;
 
   return (
@@ -34,7 +39,7 @@ export function Hero() {
           className="absolute inset-0 z-0"
         >
           <EditableImage 
-            src={slide.bg} 
+            src={currentBg || ''} 
             loading="eager"
             onSave={(url) => updateSlide(slide.id, { bg: url })}
             className="w-full h-full object-cover"

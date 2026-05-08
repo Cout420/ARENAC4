@@ -137,8 +137,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signInWithGoogle();
     } catch (e: any) {
       console.error("Login failed:", e);
-      if (e?.code === 'auth/configuration-not-found' || e?.message?.includes('configuration-not-found')) {
-        alert("Aviso do Firebase: Autenticação do Google não ativada.\nAtivando Modo Edição de Emergência (Offline) para futcout@gmail.com.");
+      if (e?.code === 'auth/configuration-not-found' || e?.message?.includes('configuration-not-found') || e?.code === 'auth/unauthorized-domain' || e?.message?.includes('unauthorized-domain')) {
+        let alertMsg = "Aviso do Firebase: Autenticação do Google não ativada.\nAtivando Modo Edição de Emergência (Offline) para futcout@gmail.com.";
+        if (e?.code === 'auth/unauthorized-domain' || e?.message?.includes('unauthorized-domain')) {
+          alertMsg = `Aviso do Firebase: Domínio não autorizado.\n\nPor favor, copie as duas URLs abaixo e adicione em 'Authentication > Settings > Authorized domains' no Console do Firebase:\n1) ais-dev-rgdcjomwpee5adjvncvzqj-58843737021.us-east1.run.app\n2) ais-pre-rgdcjomwpee5adjvncvzqj-58843737021.us-east1.run.app\n\nAtivando Modo Edição de Emergência (Offline) para administração temporária e para prevenir tela branca.`;
+        }
+        alert(alertMsg);
         setUser({ 
           uid: 'offline-admin', 
           email: 'futcout@gmail.com', 

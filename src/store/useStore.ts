@@ -63,7 +63,7 @@ export const useStore = create<StoreState>()(
       titleLine1: 'Destaque C4',
       titleLine2: 'Time Vencedor',
       desc: 'O Hall da Fama da ARENA C4. Celebre as conquistas da sua equipe em nossa Quadra Oficial.',
-      bg: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop',
+      bg: 'https://i.imgur.com/XJfo1xK.jpeg',
       cardImage: 'https://images.unsplash.com/photo-1543351611-58f69d7c1781?q=80&w=800&auto=format&fit=crop'
     },
     {

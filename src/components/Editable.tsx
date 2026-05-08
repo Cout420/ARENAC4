@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, ChangeEvent } from 'react';
 import { useStore } from '../store/useStore';
 import { Edit2, ImagePlus, Check, X, Loader2 } from 'lucide-react';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
 
 interface EditableTextProps {
@@ -114,36 +114,21 @@ export function EditableImage({
       const fileName = `images/${Date.now()}-${uniqueId}.${fileExt}`;
       const storageRef = ref(storage, fileName);
       
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload is ${progress}% done`);
-        },
-        (error) => {
-          console.error("Upload error", error);
-          setIsUploading(false);
-          if (error.code === 'storage/retry-limit-exceeded') {
-            alert("Erro do Firebase Storage: Limite de tentativas excedido.\n\nISSO GERALMENTE OCORRE PORQUE O STORAGE NÃO FOI ATIVADO.\n1. Acesse o Firebase Console.\n2. Vá em 'Storage' e clique em 'Get Started'.\n3. Configure as Regras (Rules) para permitir leitura/escrita.");
-          } else if (error.code === 'storage/unauthorized') {
-            alert("Erro de Permissão: Suas regras do Firebase Storage estão bloqueando o upload. Acesse o Console do Firebase > Storage > Rules e libere o acesso (ex: allow read, write: if true;).");
-          } else {
-            alert(`Erro ao fazer upload da imagem: ${error.message}`);
-          }
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          setIsLoaded(false); // Reset to trigger blur animation
-          onSave(downloadURL);
-          setIsUploading(false);
-        }
-      );
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      setIsLoaded(false); // Reset to trigger blur animation
+      onSave(downloadURL);
     } catch (error: any) {
       console.error("Upload error", error);
+      if (error.code === 'storage/retry-limit-exceeded') {
+        alert("Erro do Firebase Storage: Limite de tentativas excedido.\n\nISSO GERALMENTE OCORRE PORQUE O STORAGE NÃO FOI ATIVADO NO CONSOLE.\n1. Acesse o Firebase Console.\n2. Vá em 'Storage' e clique em 'Get Started'.\n3. Configure as Regras (Rules) para permitir leitura/escrita.");
+      } else if (error.code === 'storage/unauthorized') {
+        alert("Erro de Permissão: Suas regras do Firebase Storage estão bloqueando o upload. Acesse o Console do Firebase > Storage > Rules e libere o acesso (ex: allow read, write: if true;).");
+      } else {
+        alert(`Erro ao fazer upload da imagem: ${error.message || 'Desconhecido'}`);
+      }
+    } finally {
       setIsUploading(false);
-      alert(`Erro ao fazer upload da imagem: ${error?.message || 'Desconhecido'}`);
     }
   };
 
